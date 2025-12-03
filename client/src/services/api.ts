@@ -89,6 +89,11 @@ class APIClient {
     return response.data;
   }
 
+  async analyzeTicket(ticket_id: number) {
+    const response = await this.client.post(`/tickets/${ticket_id}/analyze`);
+    return response.data;
+  }
+
   async getTicketConversations(ticket_id: number) {
     const response = await this.client.get(`/tickets/${ticket_id}`, {
       params: { include_conversations: true },

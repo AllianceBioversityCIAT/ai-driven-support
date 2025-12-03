@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Dict, Any, Optional
 from config import config
 from api.freshservice_client import FreshServiceClient
+from services.ai_analyzer import TicketAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -138,3 +139,29 @@ async def search_tickets(query: str = Query(..., min_length=1)):
     except Exception as e:
         logger.error(f"❌ Error searching tickets: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error searching tickets: {str(e)}")
+
+@router.post("/{ticket_id}/analyze")
+async def analyze_ticket(ticket_id: str):
+    """Analyze a single ticket with AI"""
+    logger.info(f"🤖 Analyzing ticket: {ticket_id}")
+    try:
+        client = get_fs_client()
+        ticket = client.get_ticket(ticket_id)
+
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+        # Initialize AI analyzer
+        analyzer = TicketAnalyzer()
+        analysis = analyzer.analyze_ticket(ticket)
+
+        return {
+            "status": "success",
+            "ticket_id": ticket_id,
+            "analysis": analysis
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error analyzing ticket: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error analyzing ticket: {str(e)}")
