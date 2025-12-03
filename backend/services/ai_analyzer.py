@@ -1,6 +1,6 @@
 """
 AI Ticket Analyzer Service
-Analyzes support tickets using OpenAI to provide:
+Analyzes support tickets using AWS Bedrock to provide:
 - Summary
 - Possible category
 - Possible automations
@@ -9,43 +9,58 @@ Analyzes support tickets using OpenAI to provide:
 import logging
 from typing import Optional, Dict, Any
 import json
-from openai import OpenAI
+import boto3
 import os
+import re
+from prompts import TICKET_ANALYSIS_SYSTEM_PROMPT, TICKET_ANALYSIS_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
 
 class TicketAnalyzer:
-    """Analyzes tickets using OpenAI API"""
+    """Analyzes tickets using AWS Bedrock API"""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, aws_access_key: Optional[str] = None, aws_secret_key: Optional[str] = None):
         """
         Initialize the ticket analyzer
-        
+
         Args:
-            api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
+            aws_access_key: AWS Access Key (defaults to AWS_ACCESS_KEY env var)
+            aws_secret_key: AWS Secret Key (defaults to AWS_SECRET_ACCESS_KEY env var)
         """
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            logger.warning("OpenAI API key not configured")
+        self.aws_access_key = aws_access_key or os.getenv("AWS_ACCESS_KEY")
+        self.aws_secret_key = aws_secret_key or os.getenv("AWS_SECRET_ACCESS_KEY")
+
+        if not self.aws_access_key or not self.aws_secret_key:
+            logger.warning("AWS credentials not configured")
             self.client = None
         else:
-            self.client = OpenAI(api_key=self.api_key)
+            try:
+                self.client = boto3.client(
+                    'bedrock-runtime',
+                    region_name='us-east-1',
+                    aws_access_key_id=self.aws_access_key,
+                    aws_secret_access_key=self.aws_secret_key
+                )
+                logger.info("[AI] AWS Bedrock client initialized")
+            except Exception as e:
+                logger.error(f"[AI] Failed to initialize AWS Bedrock: {str(e)}")
+                self.client = None
 
     def analyze_ticket(self, ticket_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Analyze a ticket and provide insights
-        
+
         Args:
             ticket_data: Dictionary containing ticket information
-            
+
         Returns:
             Dictionary with analysis results or error
         """
         if not self.client:
             return {
                 "status": "error",
-                "message": "OpenAI API key not configured",
+                "message": "AWS credentials not configured",
                 "ticket_id": ticket_data.get("id"),
             }
 
@@ -55,33 +70,54 @@ class TicketAnalyzer:
             subject = ticket_data.get("subject", "")
             description = ticket_data.get("description", "")
             description_text = ticket_data.get("description_text", "")
-            
+
             # Use description_text if available, otherwise use description
             full_description = description_text or description
-            
+
             logger.info(f"[AI] Analyzing ticket {ticket_id}...")
 
             # Create the analysis prompt
             prompt = self._create_analysis_prompt(subject, full_description)
 
-            # Call OpenAI API
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": self._get_system_prompt(),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.7,
-                max_tokens=1000,
-                response_format={"type": "json_object"},
+            # Call AWS Bedrock API with Claude 3.5 Sonnet
+            body = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1000,
+                "system": self._get_system_prompt(),
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ]
+            }
+
+            response = self.client.invoke_model(
+                modelId="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+                body=json.dumps(body)
             )
 
-            # Parse response
-            response_text = response.choices[0].message.content
-            analysis_result = json.loads(response_text)
+            # Parse Bedrock response
+            response_body = json.loads(response['body'].read())
+
+            # Debug: log the response structure
+            logger.info(f"[AI] Response structure: {response_body}")
+
+            response_text = response_body.get('content', [{}])[0].get('text', '').strip()
+            if not response_text:
+                logger.error(f"[AI] Empty response text. Full response: {response_body}")
+                raise ValueError("Empty response text from Bedrock model")
+
+            logger.info(f"[AI] Response text: {response_text[:200]}")
+            
+            # Extract JSON from markdown code blocks if present
+            import re
+            json_match = re.search(r'```(?:json)?\s*(.*?)\s*```', response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+                logger.info(f"[AI] Extracted JSON from markdown: {json_str[:100]}")
+            else:
+                json_str = response_text
+                logger.info(f"[AI] Using raw response text as JSON")
+            
+            analysis_result = json.loads(json_str)
 
             logger.info(f"[AI] Analysis complete for ticket {ticket_id}")
 
@@ -108,66 +144,24 @@ class TicketAnalyzer:
 
     def _get_system_prompt(self) -> str:
         """Get the system prompt for consistent AI behavior"""
-        return """You are a professional support ticket analyzer. Your role is to analyze support tickets and provide structured insights WITHOUT hallucinating or making assumptions beyond what is explicitly stated in the ticket.
-
-IMPORTANT RULES:
-1. Only analyze what is explicitly written in the ticket
-2. Do NOT invent information or make assumptions about missing data
-3. Do NOT categorize based on assumptions - suggest categories based ONLY on what's mentioned
-4. Provide factual analysis based solely on the ticket content
-5. Be conservative in your assessments
-
-Respond with a JSON object containing your analysis."""
+        return TICKET_ANALYSIS_SYSTEM_PROMPT
 
     def _create_analysis_prompt(self, subject: str, description: str) -> str:
         """Create the analysis prompt"""
-        return f"""Analyze the following support ticket and provide insights in JSON format.
-
-TICKET SUBJECT: {subject}
-
-TICKET DESCRIPTION:
-{description}
-
-Provide a JSON response with the following structure (ONLY include these fields):
-{{
-    "summary": "A concise 2-3 sentence summary of the ticket issue (based ONLY on what's stated)",
-    "possible_categories": [
-        {{
-            "category": "Category name",
-            "confidence": "high/medium/low",
-            "reason": "Why this category based on ticket content"
-        }}
-    ],
-    "possible_automations": [
-        {{
-            "automation": "What could be automated",
-            "description": "How it would work",
-            "feasibility": "high/medium/low"
-        }}
-    ],
-    "user_sentiment": {{
-        "overall_feeling": "positive/neutral/negative/frustrated/urgent",
-        "indicators": ["List of text indicators that suggest this feeling"],
-        "urgency_level": "low/medium/high/critical"
-    }}
-}}
-
-IMPORTANT:
-- summary: Extract only what's explicitly mentioned, don't infer additional problems
-- possible_categories: Only suggest categories that are clearly hinted at or mentioned in the ticket
-- possible_automations: Suggest automations that would directly solve or help with the stated issue
-- user_sentiment: Analyze tone and language - look for keywords indicating emotion, frustration, politeness, etc.
-- confidence/feasibility: Be conservative - use "low" if not clear"""
+        return TICKET_ANALYSIS_PROMPT_TEMPLATE.format(
+            subject=subject,
+            description=description
+        )
 
     def analyze_multiple_tickets(
         self, tickets: list
     ) -> Dict[str, Any]:
         """
         Analyze multiple tickets
-        
+
         Args:
             tickets: List of ticket dictionaries
-            
+
         Returns:
             Dictionary with batch analysis results
         """

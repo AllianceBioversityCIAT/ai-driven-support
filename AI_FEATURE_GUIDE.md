@@ -39,11 +39,13 @@ The AI Analysis button appears in the ticket detail view. Click it to analyze th
 ### Analyze Single Ticket
 
 **Request:**
+
 ```
 POST /api/tickets/{ticket_id}/analyze
 ```
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -94,11 +96,11 @@ POST /api/tickets/{ticket_id}/analyze
 
 ### Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | Your OpenAI API key |
-| `FRESHSERVICE_API_KEY` | Yes | FreshService API key |
-| `FRESHSERVICE_DOMAIN` | Yes | Your FreshService domain |
+| Variable               | Required | Description              |
+| ---------------------- | -------- | ------------------------ |
+| `OPENAI_API_KEY`       | Yes      | Your OpenAI API key      |
+| `FRESHSERVICE_API_KEY` | Yes      | FreshService API key     |
+| `FRESHSERVICE_DOMAIN`  | Yes      | Your FreshService domain |
 
 ### Backend Files
 
@@ -114,11 +116,13 @@ POST /api/tickets/{ticket_id}/analyze
 ## 📊 Analysis Output Explained
 
 ### Summary
+
 - **What**: Concise description of the issue
 - **How**: Extracted directly from ticket content
 - **Confidence**: Always 100% accurate (directly from ticket text)
 
 ### Possible Categories
+
 - **Category**: Suggested ticket category
 - **Confidence Levels**:
   - **High**: Clearly mentioned or heavily implied in ticket
@@ -127,6 +131,7 @@ POST /api/tickets/{ticket_id}/analyze
 - **Reason**: Explanation of why this category was suggested
 
 ### Possible Automations
+
 - **Automation**: What could be automated
 - **Description**: How the automation would work
 - **Feasibility Levels**:
@@ -135,7 +140,9 @@ POST /api/tickets/{ticket_id}/analyze
   - **Low**: Complex or uncertain effectiveness
 
 ### User Sentiment
+
 - **Overall Feeling**:
+
   - `positive`: Satisfied, happy, complimentary tone
   - `neutral`: Factual, without emotion
   - `negative`: Dissatisfied, critical
@@ -159,6 +166,7 @@ POST /api/tickets/{ticket_id}/analyze
 ## 💰 Cost Considerations
 
 Using `gpt-4o-mini`:
+
 - Average ticket analysis: ~0.002-0.005 USD
 - Batch processing 1000 tickets: ~2-5 USD
 - See [OpenAI Pricing](https://openai.com/pricing/) for current rates
@@ -203,6 +211,7 @@ OPENAI_API_KEY=sk-proj-your-key-here
 ### "Failed to parse AI response"
 
 **Possible causes**:
+
 - API rate limit exceeded
 - Invalid API key
 - Network connectivity issue
@@ -218,6 +227,7 @@ OPENAI_API_KEY=sk-proj-your-key-here
 ### "Analysis failed" error
 
 Check backend logs:
+
 ```bash
 cd backend
 python main.py  # Look for error messages
@@ -232,6 +242,7 @@ python main.py  # Look for error messages
 ## 🚀 Future Enhancements
 
 Potential improvements:
+
 - Multi-language support
 - Custom analysis templates
 - Analysis result caching
@@ -248,6 +259,7 @@ Potential improvements:
 ## 🤝 Support
 
 For issues or questions:
+
 1. Check the troubleshooting section above
 2. Review backend logs: `backend.log`
 3. Open an issue on [GitHub](https://github.com/SantiagoSC1999/FreshAI-Service/issues)
