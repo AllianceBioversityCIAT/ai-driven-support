@@ -1,0 +1,81 @@
+{
+  "name": "freshservice-mcp",
+  "version": "1.0.0",
+  "description": "MCP Server for FreshService ticket integration",
+  "author": "FreshAI Service",
+  "tools": [
+    {
+      "name": "ticket.list",
+      "description": "List all tickets from FreshService",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "description": "Page number (default: 1)"
+          },
+          "per_page": {
+            "type": "integer",
+            "description": "Items per page (default: 30, max: 100)"
+          }
+        }
+      }
+    },
+    {
+      "name": "ticket.get",
+      "description": "Get ticket details by ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Ticket ID"
+          }
+        },
+        "required": ["id"]
+      }
+    },
+    {
+      "name": "ticket.search",
+      "description": "Search tickets by query string",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query string"
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "ticket.summarize",
+      "description": "Generate AI summary and analysis for a ticket",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Ticket ID"
+          }
+        },
+        "required": ["id"]
+      }
+    },
+    {
+      "name": "ticket.classify",
+      "description": "Classify ticket and find automation opportunities",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Ticket ID"
+          }
+        },
+        "required": ["id"]
+      }
+    }
+  ]
+}
