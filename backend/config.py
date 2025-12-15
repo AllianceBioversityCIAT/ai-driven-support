@@ -18,6 +18,12 @@ class Config:
     AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
     
+    # Notifications
+    SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
+    
+    # Webhook Configuration
+    AUTO_ANALYZE_GROUP_IDS = os.getenv("AUTO_ANALYZE_GROUP_IDS", "").split(",")  # Comma-separated group IDs
+    
     # Database
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./freshai.db")
     
