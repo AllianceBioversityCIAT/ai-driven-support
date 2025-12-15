@@ -1,19 +1,20 @@
 """
-Ticket routes for FreshAI API
+Ticket Management API Endpoints
 """
 import logging
 from fastapi import APIRouter, HTTPException, Query
-from typing import Dict, Any, Optional
+from typing import Optional
 from config import config
 from api.freshservice_client import FreshServiceClient
-from services.ai_analyzer import TicketAnalyzer
+from ..application.list_tickets import ListTicketsUseCase
+from ..application.get_ticket_details import GetTicketDetailsUseCase
+from ..application.search_tickets import SearchTicketsUseCase
 
 logger = logging.getLogger(__name__)
 
-# Create router
 router = APIRouter()
 
-# Initialize clients
+
 def get_fs_client() -> FreshServiceClient:
     """Get FreshService client"""
     if not config.FRESHSERVICE_API_KEY or not config.FRESHSERVICE_DOMAIN:
@@ -37,18 +38,12 @@ async def list_tickets(
     logger.info(f"📋 Fetching tickets: page={page}, per_page={per_page}, group_id={group_id}")
     try:
         client = get_fs_client()
-        result = client.get_tickets(page=page, per_page=per_page, group_id=group_id)
+        use_case = ListTicketsUseCase(client)
+        result = use_case.execute(page=page, per_page=per_page, group_id=group_id)
+        
         return {
             "status": "success",
-            "data": {
-                "tickets": result.get("tickets", []),
-                "pagination": {
-                    "page": result.get("page"),
-                    "per_page": result.get("per_page"),
-                    "total": result.get("total"),
-                    "has_more": result.get("has_more")
-                }
-            }
+            "data": result
         }
     except Exception as e:
         logger.error(f"❌ Error fetching tickets: {str(e)}")
@@ -61,14 +56,11 @@ async def get_ticket(ticket_id: str, include_conversations: bool = False):
     logger.info(f"🎫 Fetching ticket: {ticket_id}")
     try:
         client = get_fs_client()
-        ticket = client.get_ticket(ticket_id)
+        use_case = GetTicketDetailsUseCase(client)
+        ticket = use_case.execute(ticket_id, include_conversations)
 
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
-
-        if include_conversations:
-            conversations = client.get_ticket_conversations(ticket_id)
-            ticket['conversations'] = conversations
 
         return {
             "status": "success",
@@ -87,7 +79,8 @@ async def get_ticket_summary(ticket_id: str):
     logger.info(f"📄 Getting summary for ticket: {ticket_id}")
     try:
         client = get_fs_client()
-        ticket = client.get_ticket(ticket_id)
+        use_case = GetTicketDetailsUseCase(client)
+        ticket = use_case.execute(ticket_id)
         
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
@@ -130,7 +123,9 @@ async def search_tickets(query: str = Query(..., min_length=1)):
     logger.info(f"🔍 Searching tickets: {query}")
     try:
         client = get_fs_client()
-        results = client.search_tickets(query)
+        use_case = SearchTicketsUseCase(client)
+        results = use_case.execute(query)
+        
         return {
             "status": "success",
             "results": results,
@@ -139,52 +134,3 @@ async def search_tickets(query: str = Query(..., min_length=1)):
     except Exception as e:
         logger.error(f"❌ Error searching tickets: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error searching tickets: {str(e)}")
-
-@router.post("/{ticket_id}/analyze")
-async def analyze_ticket(ticket_id: str):
-    """Analyze a single ticket with AI"""
-    logger.info(f"🤖 Analyzing ticket: {ticket_id}")
-    try:
-        client = get_fs_client()
-        ticket = client.get_ticket(ticket_id)
-
-        if not ticket:
-            raise HTTPException(status_code=404, detail="Ticket not found")
-
-        # Log ticket data for debugging
-        logger.info(f"[ENDPOINT] Ticket retrieved: ID={ticket.get('id')}, Subject={ticket.get('subject', '')[:50]}...")
-        logger.info(f"[ENDPOINT] Ticket keys: {list(ticket.keys())}")
-
-        # Initialize AI analyzer
-        analyzer = TicketAnalyzer()
-        analysis = analyzer.analyze_ticket(ticket)
-        
-        # Send notification to Slack if configured
-        if config.SLACK_WEBHOOK_URL:
-            try:
-                from infrastructure.notifications import SlackNotificationService
-                slack_service = SlackNotificationService(config.SLACK_WEBHOOK_URL)
-                
-                if analysis.get("status") == "success" and analysis.get("analysis"):
-                    slack_service.send_ticket_analysis(
-                        ticket_id, 
-                        analysis["analysis"],
-                        domain=config.FRESHSERVICE_DOMAIN
-                    )
-                    logger.info(f"[ENDPOINT] 📨 Slack notification sent for ticket {ticket_id}")
-                else:
-                    logger.warning(f"[ENDPOINT] ⚠️ Skipping Slack notification - analysis failed")
-            except Exception as e:
-                logger.error(f"[ENDPOINT] ❌ Failed to send Slack notification: {str(e)}")
-                # Don't fail the request if Slack notification fails
-
-        return {
-            "status": "success",
-            "ticket_id": ticket_id,
-            "analysis": analysis
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Error analyzing ticket: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error analyzing ticket: {str(e)}")

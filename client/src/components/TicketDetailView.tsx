@@ -137,7 +137,6 @@ const TicketDetailView: React.FC<TicketDetailViewProps> = ({
       {showAIAnalysis && (
         <AIAnalysisPanel
           ticketId={ticket.id.toString()}
-          ticketData={ticket}
           onClose={() => setShowAIAnalysis(false)}
         />
       )}
